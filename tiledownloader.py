@@ -123,8 +123,10 @@ def worker(q):
         td = q.get()
         z, x, y = td
         get_tile(z, x, y)
-        q.task_done()
-
+        try:
+            q.task_done()
+        except AttributeError:
+            pass
 def setup():
     #q = Queue(maxsize=0)
     q = MQueue(maxsize=0)

@@ -3,29 +3,8 @@ import tiledownloader
 import pygame
 import functools
 import multiprocessing
-
-from queue import Queue
-from threading import Thread
-
-pygame.init()
-pygame.font.init()
-
-font = pygame.font.SysFont("Arial", 18)
-small = pygame.font.SysFont("Courier New", 15)
-FLAGS = pygame.HWSURFACE|pygame.DOUBLEBUF|pygame.RESIZABLE
-SIZE = WIDTH, HEIGHT = (900, 600)
-
-ORIGIN = (42.36661312067483, -71.06257793936203)
-ZOOM = 0
-REDRAW = True
-
-screen = pygame.display.set_mode(SIZE, FLAGS)
-
-tilecache = {}
-lowrescache = {}
-downloaded = set()
-
-backup_image = pygame.image.load("tiles\\backup.png")
+import queue
+import threading
 
 #@functools.lru_cache(maxsize=None)
 def load_image(z, x, y, fail=False):
@@ -96,20 +75,36 @@ def draw_tiles(screen):
             screen.blit(image, tile_offset)
             pygame.draw.rect(screen, (255,0,0), (tile_offset, (256,256)), 1)
 
-
-
-
-
 if __name__ == "__main__":
+    pygame.init()
+    pygame.font.init()
+
+    font = pygame.font.SysFont("Arial", 18)
+    small = pygame.font.SysFont("Courier New", 15)
+    FLAGS = pygame.HWSURFACE | pygame.DOUBLEBUF | pygame.RESIZABLE
+    SIZE = WIDTH, HEIGHT = (900, 600)
+
+    ORIGIN = (42.36661312067483, -71.06257793936203)
+    ZOOM = 0
+    REDRAW = True
+
+    screen = pygame.display.set_mode(SIZE, FLAGS)
+
+    tilecache = {}
+    lowrescache = {}
+    downloaded = set()
+
+    backup_image = pygame.image.load("tiles\\backup.png")
+
     pygame.display.set_caption("Intercity Rail Game")
     screen.fill((255, 255, 255))
     pygame.display.flip()
 
-    q = Queue(maxsize=0)
-    #q = multiprocessing.Queue(maxsize=0)
-    for i in range(1):
-        t = Thread(target=tiledownloader.worker, args=(q,), daemon=True)
-        #t = multiprocessing.Process(target=tiledownloader.worker, args=(q,))
+    #q = queue.Queue(maxsize=0)
+    q = multiprocessing.Queue(maxsize=0)
+    for i in range(10):
+        #t = threading.Thread(target=tiledownloader.worker, args=(q,), daemon=True)
+        t = multiprocessing.Process(target=tiledownloader.worker, args=(q,), daemon=True)
         t.start()
 
     while True:
