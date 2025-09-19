@@ -74,7 +74,7 @@ def draw_tiles(screen):
             image = load_image(ZOOM, basetile[0] + xtile, basetile[1] + ytile)
             tile_offset = (offset[0] + (xtile * 256), offset[1] + (ytile * 256))
             screen.blit(image, tile_offset)
-            pygame.draw.rect(screen, (255,0,0), (tile_offset, (256,256)), 1)
+            #pygame.draw.rect(screen, (255,0,0), (tile_offset, (256,256)), 1)
 
 def draw_cities(screen):
     center = WIDTH // 2, HEIGHT // 2
@@ -97,12 +97,6 @@ def draw_cities(screen):
 
 
         pygame.draw.circle(screen, (255,0,0), (posx, posy), 10)
-        #print(city)
-        #print(citytile, cityoffset)
-        #print(basetile, basepoint)
-        #print(posx, posy)
-        #exit()
-
 
 
 def render(screen):
@@ -133,13 +127,24 @@ def clickpos_to_realpos(x, y):
     lat_d = math.degrees(lat_r)
     return lat_d, lon_d
 
-def zoom_in():
-    global ZOOM
+def zoom_in(mousepos = None):
+    global ZOOM, ORIGIN
+    if mousepos is not None:
+        ORIGIN = clickpos_to_realpos(mousepos[0], mousepos[1])
     ZOOM += 1
     if ZOOM > 19: ZOOM = 19
+    if mousepos is not None:
+        oldreal = clickpos_to_realpos(WIDTH // 2, HEIGHT // 2)
+        newreal = clickpos_to_realpos(*mousepos)
+        deltax = newreal[0] - oldreal[0]
+        deltay = newreal[1] - oldreal[1]
+        move(deltax, deltay)
 
-def zoom_out(bounded=True):
-    global ZOOM
+def zoom_out(bounded=True, mousepos = None):
+    global ZOOM, ORIGIN
+    if mousepos is not None:
+        ORIGIN = clickpos_to_realpos(mousepos[0], mousepos[1])
+
     ZOOM -= 1
     if ZOOM < 0: ZOOM = 0
     if bounded:
@@ -148,7 +153,12 @@ def zoom_out(bounded=True):
         print(f"{SIZE=}, {tiles=}, {maxzoom=}")
         if ZOOM < maxzoom:
             ZOOM = maxzoom
-
+    if mousepos is not None:
+        oldreal = clickpos_to_realpos(WIDTH // 2, HEIGHT // 2)
+        newreal = clickpos_to_realpos(*mousepos)
+        deltax = newreal[0] - oldreal[0]
+        deltay = newreal[1] - oldreal[1]
+        move(deltax, deltay)
 def move(deltax, deltay):
     global ORIGIN
     ORIGIN = (ORIGIN[0] - deltax, ORIGIN[1] - deltay)
@@ -161,9 +171,10 @@ def move(deltax, deltay):
 
 if __name__ == "__main__":
     import pygame
-
-    filename = "datasets\\USA_bordered.csv"
-    cities = citiesloader.load_file(filename)
+    cities = []
+    filenames = ["datasets\\USA_bordered.csv", "datasets\\US_CAN_BORDER.csv", "datasets\\US_MEX_Border.csv",]# "datasets\\msa_canada.csv"]
+    for filename in filenames:
+        cities += citiesloader.load_file(filename)
     cities.sort(key=lambda city: city.population, reverse=True)
     for city in cities:
         print(city.lat, city.lon)
@@ -245,9 +256,9 @@ if __name__ == "__main__":
                     oldpos = pygame.mouse.get_pos()
                     CLICKED = True
                 elif event.button == 4:
-                    zoom_in()
+                    zoom_in(mousepos=pygame.mouse.get_pos())
                 elif event.button == 5:
-                    zoom_out(True)
+                    zoom_out(True, mousepos=pygame.mouse.get_pos())
             if event.type == pygame.MOUSEBUTTONUP:
                 if event.button == 1:
                     CLICKED = False
