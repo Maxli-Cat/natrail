@@ -1,10 +1,11 @@
 import sys
 import tiledownloader
-import pygame
 import functools
 import multiprocessing
 import queue
 import threading
+import citiesloader
+import math
 
 #@functools.lru_cache(maxsize=None)
 def load_image(z, x, y, fail=False):
@@ -75,7 +76,98 @@ def draw_tiles(screen):
             screen.blit(image, tile_offset)
             pygame.draw.rect(screen, (255,0,0), (tile_offset, (256,256)), 1)
 
+def draw_cities(screen):
+    center = WIDTH // 2, HEIGHT // 2
+
+    tilecountx = WIDTH // 256 + 2
+    tilecounty = HEIGHT // 256 + 2
+
+    basepoint = tiledownloader.point_on_tile(*ORIGIN, ZOOM)
+    basepoint = tuple(int(i * 256) for i in basepoint)
+
+    basetile = tiledownloader.location_to_tile(*ORIGIN, ZOOM)
+
+
+    for city in cities:
+        citytile = tiledownloader.location_to_tile(city.lat, city.lon, ZOOM)
+        cityoffset = tiledownloader.point_on_tile(city.lat, city.lon, ZOOM)
+        cityoffset = tuple(int(i*256) for i in cityoffset)
+        posx = center[0] - basepoint[0] - (basetile[0] * 256) + (citytile[0] * 256) + cityoffset[0]
+        posy = center[1] - basepoint[1] - (basetile[1] * 256) + (citytile[1] * 256) + cityoffset[1]
+
+
+        pygame.draw.circle(screen, (255,0,0), (posx, posy), 10)
+        #print(city)
+        #print(citytile, cityoffset)
+        #print(basetile, basepoint)
+        #print(posx, posy)
+        #exit()
+
+
+
+def render(screen):
+    draw_tiles(screen)
+    draw_cities(screen)
+
+def clickpos_to_realpos(x, y):
+    center = WIDTH // 2, HEIGHT // 2
+
+    tilecountx = WIDTH // 256 + 2
+    tilecounty = HEIGHT // 256 + 2
+
+    basepoint = tiledownloader.point_on_tile(*ORIGIN, ZOOM)
+    #basepoint = tuple(int(i * 256) for i in basepoint)
+
+    basetile = tiledownloader.location_to_tile(*ORIGIN, ZOOM)
+
+    xpos = (x - center[0]) / 256
+    ypos = (y - center[1]) / 256
+
+    click_tile_x = basetile[0] + basepoint[0] + xpos
+    click_tile_y = basetile[1] + basepoint[1] + ypos
+
+    n = 1 << ZOOM
+
+    lon_d = click_tile_x / n * 360 - 180
+    lat_r = math.atan(math.sinh(math.pi * (1 - 2 * click_tile_y / n)))
+    lat_d = math.degrees(lat_r)
+    return lat_d, lon_d
+
+def zoom_in():
+    global ZOOM
+    ZOOM += 1
+    if ZOOM > 19: ZOOM = 19
+
+def zoom_out(bounded=True):
+    global ZOOM
+    ZOOM -= 1
+    if ZOOM < 0: ZOOM = 0
+    if bounded:
+        tiles = math.ceil(min(SIZE) / 256)
+        maxzoom = math.ceil(math.log(tiles, 2))
+        print(f"{SIZE=}, {tiles=}, {maxzoom=}")
+        if ZOOM < maxzoom:
+            ZOOM = maxzoom
+
+def move(deltax, deltay):
+    global ORIGIN
+    ORIGIN = (ORIGIN[0] - deltax, ORIGIN[1] - deltay)
+    print(f"{ORIGIN=}")
+    while ORIGIN[1] < -180:
+        ORIGIN = (ORIGIN[0], ORIGIN[1] + 360)
+    while ORIGIN[1] > 180:
+        ORIGIN = (ORIGIN[0], ORIGIN[1] - 360)
+
+
 if __name__ == "__main__":
+    import pygame
+
+    filename = "datasets\\USA_bordered.csv"
+    cities = citiesloader.load_file(filename)
+    cities.sort(key=lambda city: city.population, reverse=True)
+    for city in cities:
+        print(city.lat, city.lon)
+
     pygame.init()
     pygame.font.init()
 
@@ -85,7 +177,7 @@ if __name__ == "__main__":
     SIZE = WIDTH, HEIGHT = (900, 600)
 
     ORIGIN = (42.36661312067483, -71.06257793936203)
-    ZOOM = 0
+    ZOOM = 5
     REDRAW = True
 
     screen = pygame.display.set_mode(SIZE, FLAGS)
@@ -107,9 +199,21 @@ if __name__ == "__main__":
         t = multiprocessing.Process(target=tiledownloader.worker, args=(q,), daemon=True)
         t.start()
 
+    CLICKED = False
+    oldpos = (0,0)
+
     while True:
         if REDRAW:
-            draw_tiles(screen)
+            render(screen)
+        if CLICKED:
+            newpos = pygame.mouse.get_pos()
+            oldreal = clickpos_to_realpos(*oldpos)
+            newreal = clickpos_to_realpos(*newpos)
+            deltax = newreal[0] - oldreal[0]
+            deltay = newreal[1] - oldreal[1]
+            move(deltax, deltay)
+            oldpos = newpos
+
         pygame.display.flip()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -123,17 +227,27 @@ if __name__ == "__main__":
                 REDRAW = True
                 keydelta = (1/(2**ZOOM)) * 33
                 if event.key == pygame.K_UP:
-                    ZOOM -= 1
-                    if ZOOM < 0: ZOOM = 0
+                    zoom_out()
                 elif event.key == pygame.K_DOWN:
-                    ZOOM += 1
-                    if ZOOM > 19: ZOOM = 19
+                    zoom_in()
 
                 elif event.key == pygame.K_w:
-                    ORIGIN = (ORIGIN[0] + keydelta, ORIGIN[1])
+                    move(keydelta, 0)
                 elif event.key == pygame.K_s:
-                    ORIGIN = (ORIGIN[0] - keydelta, ORIGIN[1])
+                    move(-keydelta, 0)
                 elif event.key == pygame.K_a:
-                    ORIGIN = (ORIGIN[0], ORIGIN[1] - keydelta)
+                    move(0, -keydelta)
                 elif event.key == pygame.K_d:
-                    ORIGIN = (ORIGIN[0], ORIGIN[1] + keydelta)
+                    move(0, keydelta)
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    oldpos = pygame.mouse.get_pos()
+                    CLICKED = True
+                elif event.button == 4:
+                    zoom_in()
+                elif event.button == 5:
+                    zoom_out(True)
+            if event.type == pygame.MOUSEBUTTONUP:
+                if event.button == 1:
+                    CLICKED = False
