@@ -5,7 +5,9 @@ import os, sys
 import time
 from tqdm import tqdm, trange
 from PIL import Image
-
+from multiprocessing import Process
+from multiprocessing import Queue as MQueue
+from multiprocessing import freeze_support
 
 from queue import Queue
 from threading import Thread
@@ -123,12 +125,24 @@ def worker(q):
         get_tile(z, x, y)
         q.task_done()
 
-q = Queue(maxsize=0)
-for i in range(16):
-    t = Thread(target=worker, args=(q,), daemon=True)
-    t.start()
+def setup():
+    #q = Queue(maxsize=0)
+    q = MQueue(maxsize=0)
+    for i in range(1):
+        #t = Thread(target=worker, args=(q,), daemon=True)
+        t = Process(target=worker, args=(q,))
+        t.start()
+    return q
 
 if __name__ == '__main__':
+    freeze_support()
+
+    q = Queue(maxsize=0)
+    for i in range(1):
+        t = Thread(target=worker, args=(q,), daemon=True)
+        #t = Process(target=worker, args=(q,))
+        t.start()
+
     ORIGIN = (43.04256466450335, -70.93208046028336)
     ZOOM = 20
     firsttile = location_to_tile(ORIGIN[0], ORIGIN[1], ZOOM)

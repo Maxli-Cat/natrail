@@ -2,6 +2,10 @@ import sys
 import tiledownloader
 import pygame
 import functools
+import multiprocessing
+
+from queue import Queue
+from threading import Thread
 
 pygame.init()
 pygame.font.init()
@@ -11,7 +15,7 @@ small = pygame.font.SysFont("Courier New", 15)
 FLAGS = pygame.HWSURFACE|pygame.DOUBLEBUF|pygame.RESIZABLE
 SIZE = WIDTH, HEIGHT = (900, 600)
 
-ORIGIN = (22.334496945981964, 91.82751129180363)
+ORIGIN = (42.36661312067483, -71.06257793936203)
 ZOOM = 0
 REDRAW = True
 
@@ -42,7 +46,7 @@ def load_image(z, x, y, fail=False):
         x += (2**z)
 
     if f"{z}_{x}_{y}" not in downloaded:
-        tiledownloader.q.put((z, x, y))
+        q.put((z, x, y))
         downloaded.add(f"{z}_{x}_{y}")
 
     filename = f"tiles\\Mapnik\\{z}\\{x}_{y}.png"
@@ -54,7 +58,7 @@ def load_image(z, x, y, fail=False):
     except FileNotFoundError as ex:
         if fail: raise ex
         if cachekey in lowrescache:
-            image = lowrescache[cachekey]
+            return lowrescache[cachekey]
         try:
             image = pygame.image.load(cachefilename)
             image = pygame.transform.scale2x(image)
@@ -100,6 +104,13 @@ if __name__ == "__main__":
     pygame.display.set_caption("Intercity Rail Game")
     screen.fill((255, 255, 255))
     pygame.display.flip()
+
+    q = Queue(maxsize=0)
+    #q = multiprocessing.Queue(maxsize=0)
+    for i in range(1):
+        t = Thread(target=tiledownloader.worker, args=(q,), daemon=True)
+        #t = multiprocessing.Process(target=tiledownloader.worker, args=(q,))
+        t.start()
 
     while True:
         if REDRAW:
